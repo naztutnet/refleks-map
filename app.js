@@ -155,7 +155,10 @@ function update() {
 }
 function fit() {
   const points = filtered().filter(l => l.coords);
-  if (map && points.length) map.fitBounds(L.latLngBounds(points.map(l => l.coords)),padding());
+  if (map && points.length) {
+    map.stop();
+    map.fitBounds(L.latLngBounds(points.map(l => l.coords)),{...padding(),animate:false});
+  }
 }
 if (typeof L !== 'undefined') {
   map = L.map('map',{zoomControl:false,minZoom:7,maxZoom:19});
