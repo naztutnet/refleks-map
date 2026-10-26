@@ -14,7 +14,7 @@ catch (error) {
   return;
 }
 let housing = {accommodations: []}, housingError = false;
-try { housing = await readJSON('accommodations.json?v=20261026-3'); }
+try { housing = await readJSON('accommodations.json?v=20261026-4'); }
 catch (error) { housingError = true; }
 const {shifts} = data;
 const shootings = data.locations;
@@ -58,6 +58,11 @@ const mapURL = l => l.yandex || 'https://yandex.ru/maps/?text='+encodeURICompone
 function shootingDetails(l){return `<article class="popup"><div class="popup__label">РЕФЛЕКС · ЗИМНИЙ БЛОК</div><h2>${esc(l.name)}</h2><span class="badge ${l.status}">${labels[l.status]}</span><p class="address">${esc(l.address)}</p>${l.coords?`<button class="coords" data-copy="${esc(l.coords.join(', '))}" aria-label="Копировать координаты"><span class="coords__label">По адресу здания:</span><span class="coords__value">${l.coords.map(x=>x.toFixed(6)).join(', ')}</span><span class="coords__hint">Копировать</span></button>`:''}${l.note?`<p class="data-note">${esc(l.note)}</p>`:''}<div class="schedule">${datesFor(l).map(d=>{const s=byDate.get(d);return `<div class="schedule-row"><strong>${d} · ${s.weekday}</strong><span>Смена №${s.number}</span></div><p>${esc(s.time)} · ${esc(s.mode)}</p>${s.special==='НОЧНАЯ СМЕНА'?'':s.note.includes('РАННЯЯ')?'<p><b>Ранняя смена</b></p>':''}`}).join('')}</div><nav class="popup-actions">${l.coords?`<a class="popup-action" href="${esc(urlRoute(l))}" target="_blank" rel="noopener">Маршрут ↗</a>`:''}${l.status!=='missing'?`<a class="popup-action popup-action--quiet" href="${esc(l.yandex)}" target="_blank" rel="noopener">Яндекс Карты ↗</a>`:''}<button class="popup-action popup-action--quiet" data-copy-location="${l.id}">Скопировать</button></nav>${datesFor(l).map(d=>{const s=byDate.get(d);return `<details><summary>КПП · ${d} · ${s.sceneCount} сцен</summary><p>Все сцены смены. Распределение сцен по адресам и варианты объектов уточняются.</p>${s.scenes.map(sc=>`<div class="scene"><strong>${esc(sc.id)} · ${esc(sc.mode)}</strong>${esc(sc.object)}${sc.sub?' / '+esc(sc.sub):''}<p>${esc(sc.summary)}</p></div>`).join('')}</details>`}).join('')}<details><summary>Данные и уточнения</summary><p>Адреса: рабочий список пользователя. Даты, номера смен, сцены: КПП от 26.10.2026, вкладка «Съемочная группа №1». Диапазон исходного КПП: 24.11–27.12.2026.</p><p>08:00–08:00 в исходной таблице показано как «Время уточняется». Точки сборов, въезды, парковки и порядок переездов не заданы.</p>${l.geoSource?`<p><a href="${esc(l.geoSource)}" target="_blank" rel="noopener">Геопривязка здания · OpenStreetMap ↗</a></p>`:''}<p>Наличие адреса не означает подтверждённое бронирование.</p></details></article>`}
 function shootingText(l){return ['РЕФЛЕКС · ЗИМНИЙ БЛОК',l.name,l.address,labels[l.status],...datesFor(l).map(d=>{const s=byDate.get(d);return `${d}.2026 (${s.weekday}) · Смена №${s.number}\n${s.time} · ${s.mode}`}),l.note,l.status!=='missing'?l.yandex:'Точный адрес не задан'].filter(Boolean).join('\n')}
 
+function occupancyRule(l) {
+  return l.kind === 'apartment'
+    ? 'Квартиры: каждому отдельная изолированная комната. Двухкомнатная — максимум 2 человека. Лимит: 1 200 ₽/чел./сутки, 37 200 ₽/чел. за 31 ночь с обязательными доплатами.'
+    : 'Приоритет — отдельная комната каждому. По 2–3 человека — запасной вариант после согласования. Лимит: 1 200 ₽/чел./сутки, 37 200 ₽ за 31 ночь. Полную стоимость и спальные места нужно подтвердить.';
+}
 function housingDetails(l) {
   const k = kinds[l.kind];
   return `<article class="popup housing-popup" style="--housing-color:${k.color}">
@@ -68,16 +73,17 @@ function housingDetails(l) {
     <p class="budget-status budget-status--${esc(l.budgetStatus)}">${esc(l.budgetLabel)}</p>
     <p class="availability-note">${esc(l.availability)}</p>
     <dl class="housing-facts"><dt>Доплаты и залог</dt><dd>${esc(l.fees)}</dd>
-      <dt>Основной вариант — по одному</dt><dd>${esc(l.beds)}</dd>
-      <dt>Запасной вариант</dt><dd>${esc(l.fallbackNote)}</dd>
+      <dt>${esc(l.occupancyTitle || "Основной вариант — по одному")}</dt><dd>${esc(l.beds)}</dd>
+      <dt>${l.kind === "apartment" ? "Условия размещения" : "Запасной вариант"}</dt><dd>${esc(l.fallbackNote)}</dd>
       <dt>Для экспедиции</dt><dd>${esc(l.note)}</dd></dl>
-    <p class="data-note">Приоритет — отдельная комната каждому. По 2–3 человека — запасной вариант после согласования. Лимит: 1 200 ₽/чел./сутки, или 37 200 ₽ за 31 ночь. Полную стоимость и спальные места нужно подтвердить.</p>
+    <p class="data-note">${esc(occupancyRule(l))}</p>
     <nav class="popup-actions">
       <a class="popup-action" href="${esc(l.source)}" target="_blank" rel="noopener">Сайт и условия ↗</a>
       <a class="popup-action popup-action--quiet" href="${esc(mapURL(l))}" target="_blank" rel="noopener">Яндекс Карты ↗</a>
       ${l.coords ? `<a class="popup-action popup-action--quiet" href="${esc(urlRoute(l))}" target="_blank" rel="noopener">Маршрут ↗</a>` : ''}
       <button class="popup-action popup-action--quiet" data-copy-location="${l.id}">Скопировать</button>
     </nav>
+    ${l.planSource ? `<p><a href="${esc(l.planSource)}" target="_blank" rel="noopener">План квартиры ↗</a></p>` : ''}
     ${l.phone ? `<p><a href="tel:${l.phone.replace(/[^+\d]/g,'')}">${esc(l.phone)}</a></p>` : ''}
     <details><summary>Источники и точка на карте</summary>
       <p>Проверка опубликованных условий: ${esc(l.checkedAt)}. Наличие на даты экспедиции не подтверждалось.</p>
@@ -90,7 +96,7 @@ function housingDetails(l) {
 function details(l) { return isHousing(l) ? housingDetails(l) : shootingDetails(l); }
 function telegram(l) {
   return isHousing(l)
-    ? ['РЕФЛЕКС · ЖИЛЬЁ · 24.11–25.12.2026',l.name,l.address,kinds[l.kind].singular,l.price,l.budgetLabel,'Приоритет — отдельная комната каждому. По 2–3 человека — запасной вариант после согласования. Лимит: 37 200 ₽ на человека за 31 ночь.',l.fees,l.beds,l.fallbackNote,l.note,l.availability,l.phone,l.source].filter(Boolean).join('\n')
+    ? ['РЕФЛЕКС · ЖИЛЬЁ · 24.11–25.12.2026',l.name,l.address,kinds[l.kind].singular,l.price,l.budgetLabel,occupancyRule(l),l.fees,l.beds,l.fallbackNote,l.note,l.availability,l.phone,l.source].filter(Boolean).join('\n')
     : shootingText(l);
 }
 function closeDetails() {
@@ -181,7 +187,7 @@ if (typeof L !== 'undefined') {
 } else $('map').innerHTML = '<div class="load-error"><strong>Подложка карты не загрузилась.</strong>Список объектов и карточки доступны. Проверьте подключение к интернету.</div>';
 $('dateFilters').innerHTML = '<button class="chip is-active" data-date="all">Все даты</button>'+shifts.map(s => `<button class="chip" data-date="${s.date}" title="${s.weekday} · Смена №${s.number}">${s.date}</button>`).join('');
 $('housingFilters').innerHTML = '<button class="chip" data-type="all">Все типы</button>'+Object.entries(kinds).map(([type,k]) => `<button class="chip" data-type="${type}" style="--housing-color:${k.color}">${k.label} <span class="chip-count">${accommodations.filter(l=>l.kind===type).length}</span></button>`).join('');
-$('housingNotice').textContent = housingError ? 'Жильё не загрузилось. Обновите страницу; съёмочные объекты доступны.' : '45 человек · приоритет — по одному. По 2–3 — запасной вариант. 24.11–25.12 · 31 ночь · до 37 200 ₽/чел. Наличие и доплаты уточняются.';
+$('housingNotice').textContent = housingError ? 'Жильё не загрузилось. Обновите страницу; съёмочные объекты доступны.' : housing.notice;
 function syncButtons() {
   for (const [selector,key,value] of [['[data-date]','date',activeDate],['#statusFilters [data-status]','status',activeStatus],['[data-layer]','layer',activeLayer],['[data-type]','type',activeType]]) {
     document.querySelectorAll(selector).forEach(n => {
