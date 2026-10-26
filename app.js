@@ -14,7 +14,7 @@ catch (error) {
   return;
 }
 let housing = {accommodations: []}, housingError = false;
-try { housing = await readJSON('accommodations.json?v=20261027-1'); }
+try { housing = await readJSON('accommodations.json?v=20261027-2'); }
 catch (error) { housingError = true; }
 const {shifts} = data;
 const shootings = data.locations;
@@ -120,7 +120,8 @@ function select(id) {
   selected = id; closeDetails(); renderList(filtered());
   const marker = markers.get(id);
   if (map && marker && l.coords) {
-    map.flyTo(l.coords,Math.max(map.getZoom(),15),{duration:matchMedia('(prefers-reduced-motion:reduce)').matches?0:.5});
+    map.stop();
+    map.setView(l.coords,Math.max(map.getZoom(),15),{animate:false});
     if (!mobile()) marker.setPopupContent(details(l)).openPopup(); else openDetails(l);
   } else openDetails(l);
   document.querySelectorAll('.marker-shell').forEach(n => n.classList.remove('is-active'));
@@ -191,6 +192,7 @@ $('housingFilters').innerHTML = '<button class="chip" data-type="all">Все т�
 for (const option of $('rentalTerm').options) {if(option.value!=='all')option.textContent += ' ('+accommodations.filter(l=>l.kind==='apartment'&&l.rentalTerm===option.value).length+')';}
 $('housingNotice').textContent = housingError ? 'Жильё не загрузилось. Обновите страницу; съёмочные объекты доступны.' : housing.notice;
 function syncButtons() {
+  if (!housingError) $('housingNotice').textContent = ['hotel','aparthotel','studio'].includes(activeType) ? (housing.hotelNotice || housing.notice) : housing.notice;
   for (const [selector,key,value] of [['[data-date]','date',activeDate],['#statusFilters [data-status]','status',activeStatus],['[data-layer]','layer',activeLayer],['[data-type]','type',activeType]]) {
     document.querySelectorAll(selector).forEach(n => {
       const active = n.dataset[key] === value;
