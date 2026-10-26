@@ -14,7 +14,7 @@ catch (error) {
   return;
 }
 let housing = {accommodations: []}, housingError = false;
-try { housing = await readJSON('accommodations.json?v=20261026-4'); }
+try { housing = await readJSON('accommodations.json?v=20261026-5'); }
 catch (error) { housingError = true; }
 const {shifts} = data;
 const shootings = data.locations;
@@ -59,8 +59,8 @@ function shootingDetails(l){return `<article class="popup"><div class="popup__la
 function shootingText(l){return ['РЕФЛЕКС · ЗИМНИЙ БЛОК',l.name,l.address,labels[l.status],...datesFor(l).map(d=>{const s=byDate.get(d);return `${d}.2026 (${s.weekday}) · Смена №${s.number}\n${s.time} · ${s.mode}`}),l.note,l.status!=='missing'?l.yandex:'Точный адрес не задан'].filter(Boolean).join('\n')}
 
 function occupancyRule(l) {
-  return l.kind === 'apartment'
-    ? 'Квартиры: каждому отдельная изолированная комната. Двухкомнатная — максимум 2 человека. Лимит: 1 200 ₽/чел./сутки, 37 200 ₽/чел. за 31 ночь с обязательными доплатами.'
+  return l.kind === 'apartment' && [2,3].includes(l.rooms)
+    ? 'Двух- и трёхкомнатные квартиры: до 80 000 ₽ за весь заезд 24.11–25.12, включая обязательные доплаты. Возвратный залог — отдельно. Каждому изолированная комната: 2-комнатная — максимум 2 человека; 3-комнатная — до 3 только после проверки планировки.'
     : 'Приоритет — отдельная комната каждому. По 2–3 человека — запасной вариант после согласования. Лимит: 1 200 ₽/чел./сутки, 37 200 ₽ за 31 ночь. Полную стоимость и спальные места нужно подтвердить.';
 }
 function housingDetails(l) {
