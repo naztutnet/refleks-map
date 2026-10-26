@@ -14,7 +14,7 @@ catch (error) {
   return;
 }
 let housing = {accommodations: []}, housingError = false;
-try { housing = await readJSON('accommodations.json?v=20261027-2'); }
+try { housing = await readJSON('accommodations.json?v=20261027-3'); }
 catch (error) { housingError = true; }
 const {shifts} = data;
 const shootings = data.locations;
@@ -29,7 +29,7 @@ const kinds = {
   apartment: {label:'Квартиры', singular:'Квартира', short:'К', color:'#7950a1'},
   studio: {label:'Студии', singular:'Студии', short:'С', color:'#a16a00'}
 };
-let activeLayer = 'all', activeType = 'all', activeDate = 'all', activeStatus = 'all', activeTerm = 'all';
+let activeLayer = 'all', activeType = 'all', activeDate = 'all', activeStatus = 'all', activeTerm = 'all', activePayment = 'all';
 let search = '', selected = null, map = null;
 const markers = new Map();
 const mobile = () => matchMedia('(max-width:720px)').matches;
@@ -43,15 +43,22 @@ function filtered() {
     if ((activeLayer === 'housing' && !home) || (activeLayer === 'shooting' && home)) return false;
     if (home) {
       if (activeType !== 'all' && l.kind !== activeType) return false;
+      if (activePayment === 'invoice' && l.payment?.invoice !== 'published') return false;
+      if (activePayment === 'card' && l.payment?.card !== 'published') return false;
+      if (activePayment === 'unknown' && l.payment?.invoice === 'published') return false;
       if (activeTerm !== 'all' && (l.kind !== 'apartment' || l.rentalTerm !== activeTerm)) return false;
     } else {
       if (activeDate !== 'all' && !l.dates.includes(activeDate)) return false;
       if (activeStatus !== 'all' && l.status !== activeStatus) return false;
     }
     const text = home
-      ? [l.name,l.address,kinds[l.kind].label,l.price,l.note,l.beds,l.parking,l.rentalTermLabel,l.regionLabel]
+      ? [l.name,l.address,kinds[l.kind].label,l.price,l.note,l.beds,l.parking,l.rentalTermLabel,l.regionLabel,l.payment?.label,l.payment?.methods,l.payment?.documents]
       : [l.name,l.address,l.note,l.coords?.join(' '),...l.dates,...l.dates.map(d => byDate.get(d).scenes.map(s => s.id+' '+s.object+' '+s.sub).join(' '))];
     return !search || text.join(' ').toLocaleLowerCase('ru').includes(search);
+  }).sort((a,b) => {
+    if (!isHousing(a) || !isHousing(b)) return 0;
+    const rank = l => l.payment?.invoice === 'published' ? 0 : l.payment?.bankTransfer === 'published' ? 1 : 2;
+    return rank(a) - rank(b);
   });
 }
 const urlRoute = l => 'https://yandex.ru/maps/?rtext='+encodeURIComponent('~'+l.coords.join(','))+'&rtt=auto';
@@ -73,7 +80,7 @@ function housingDetails(l) {
     <p class="housing-price">${esc(l.price)}</p>
     <p class="budget-status budget-status--${esc(l.budgetStatus)}">${esc(l.budgetLabel)}</p>
     <p class="availability-note">${esc(l.availability)}</p>
-    <dl class="housing-facts">${l.rentalTermLabel ? `<dt>Срок аренды</dt><dd>${esc(l.rentalTermLabel)}</dd>` : ''}<dt>Парковка</dt><dd>${esc(l.parking)}</dd><dt>Доплаты и залог</dt><dd>${esc(l.fees)}</dd>
+    <dl class="housing-facts">${l.rentalTermLabel ? `<dt>Срок аренды</dt><dd>${esc(l.rentalTermLabel)}</dd>` : ''}<dt>Оплата · приоритет по счёту</dt><dd><strong>${esc(l.payment?.label || "Способы оплаты — уточнить")}</strong><br>${esc(l.payment?.methods || "Необходимо уточнить способы оплаты.")}</dd><dt>Документы для организации</dt><dd>${esc(l.payment?.documents || "Договор, счёт и закрывающие документы необходимо уточнить.")}</dd><dt>Парковка</dt><dd>${esc(l.parking)}</dd><dt>Доплаты и залог</dt><dd>${esc(l.fees)}</dd>
       <dt>${esc(l.occupancyTitle || "Основной вариант — по одному")}</dt><dd>${esc(l.beds)}</dd>
       <dt>${l.kind === "apartment" ? "Условия размещения" : "Запасной вариант"}</dt><dd>${esc(l.fallbackNote)}</dd>
       <dt>Для экспедиции</dt><dd>${esc(l.note)}</dd></dl>
@@ -89,6 +96,7 @@ function housingDetails(l) {
     <details><summary>Источники и точка на карте</summary>
       <p>Проверка опубликованных условий: ${esc(l.checkedAt)}. Наличие на даты экспедиции не подтверждалось.</p>
       <p><a href="${esc(l.source)}" target="_blank" rel="noopener">Источник предложения ↗</a></p>
+      ${l.payment?.source ? `<p><a href="${esc(l.payment.source)}" target="_blank" rel="noopener">Условия оплаты и документов ↗</a> · проверено ${esc(l.payment.checkedAt)}</p>` : ''}
       ${l.secondarySource ? `<p><a href="${esc(l.secondarySource)}" target="_blank" rel="noopener">Дополнительный источник ↗</a></p>` : ''}
       <p>${esc(l.geoNote || 'Метка по адресу здания. Вход и место посадки группы уточняются.')}</p>
       ${l.geoSource ? `<p><a href="${esc(l.geoSource)}" target="_blank" rel="noopener">Геопривязка ↗</a></p>` : ''}
@@ -97,7 +105,7 @@ function housingDetails(l) {
 function details(l) { return isHousing(l) ? housingDetails(l) : shootingDetails(l); }
 function telegram(l) {
   return isHousing(l)
-    ? ['РЕФЛЕКС · ЖИЛЬЁ · 24.11–25.12.2026',l.name,l.address,kinds[l.kind].singular,l.price,l.budgetLabel,occupancyRule(l),l.rentalTermLabel,'Парковка: '+l.parking,l.fees,l.beds,l.fallbackNote,l.note,l.availability,l.phone,l.source].filter(Boolean).join('\n')
+    ? ['РЕФЛЕКС · ЖИЛЬЁ · 24.11–25.12.2026',l.name,l.address,kinds[l.kind].singular,l.price,l.budgetLabel,occupancyRule(l),l.rentalTermLabel,'Оплата: '+(l.payment?.label || 'уточнить'),l.payment?.methods,'Документы: '+(l.payment?.documents || 'уточнить'),'Парковка: '+l.parking,l.fees,l.beds,l.fallbackNote,l.note,l.availability,l.phone,l.source].filter(Boolean).join('\n')
     : shootingText(l);
 }
 function closeDetails() {
@@ -133,7 +141,7 @@ function card(l) {
     return `<li><button class="location-card housing-card${selected===l.id?' is-selected':''}" data-location-id="${l.id}" style="--housing-color:${k.color}">
       <span class="housing-card-icon" aria-hidden="true">${k.short}</span><span class="card-main">
       <span class="card-title">${esc(l.name)}</span><span class="card-address">${esc(l.address)}</span>
-      ${l.rentalTermLabel?`<span class="card-meta">${esc(l.rentalTermLabel)}</span>`:''}<span class="card-meta housing-card-price">${esc(l.price)}</span><span class="card-meta budget-status--${esc(l.budgetStatus)}">${esc(l.budgetLabel)}</span><span class="card-meta">${esc(k.singular)} · ${esc(l.regionLabel || (l.priority==='reserve'?'Резерв по расположению':'Центральная часть города'))}</span></span><span class="card-arrow">›</span></button></li>`;
+      ${l.rentalTermLabel?`<span class="card-meta">${esc(l.rentalTermLabel)}</span>`:''}<span class="card-meta housing-card-price">${esc(l.price)}</span><span class="card-meta budget-status--${esc(l.budgetStatus)}">${esc(l.budgetLabel)}</span><span class="card-meta payment-status${l.payment?.invoice==='published'?' payment-status--invoice':''}">${esc(l.payment?.label || "Оплата — уточнить")}</span><span class="card-meta">${esc(k.singular)} · ${esc(l.regionLabel || (l.priority==='reserve'?'Резерв по расположению':'Центральная часть города'))}</span></span><span class="card-arrow">›</span></button></li>`;
   }
   const d = datesFor(l)[0], s = byDate.get(d), [day,month] = d.split('.');
   return `<li><button class="location-card${selected===l.id?' is-selected':''}" data-location-id="${l.id}" data-status="${l.status}"><span class="card-date"><strong>${day}</strong><small>.${month}</small></span><span class="card-main"><span class="card-title">${esc(l.name)}</span><span class="card-address">${esc(l.address)}</span><span class="card-meta">${datesFor(l).join(' · ')} · ${l.status==='address'?s.mode:labels[l.status]}</span></span><span class="card-arrow">›</span></button></li>`;
@@ -191,7 +199,11 @@ $('dateFilters').innerHTML = '<button class="chip is-active" data-date="all">В�
 $('housingFilters').innerHTML = '<button class="chip" data-type="all">Все типы</button>'+Object.entries(kinds).map(([type,k]) => `<button class="chip" data-type="${type}" style="--housing-color:${k.color}">${k.label} <span class="chip-count">${accommodations.filter(l=>l.kind===type).length}</span></button>`).join('');
 for (const option of $('rentalTerm').options) {if(option.value!=='all')option.textContent += ' ('+accommodations.filter(l=>l.kind==='apartment'&&l.rentalTerm===option.value).length+')';}
 $('housingNotice').textContent = housingError ? 'Жильё не загрузилось. Обновите страницу; съёмочные объекты доступны.' : housing.notice;
+for (const option of $('paymentFilter').options) {
+  if (option.value === 'invoice' || option.value === 'card') option.textContent += ' ('+accommodations.filter(l=>l.payment?.[option.value]==='published').length+')';
+}
 function syncButtons() {
+  $('paymentFilter').value = activePayment;
   if (!housingError) $('housingNotice').textContent = ['hotel','aparthotel','studio'].includes(activeType) ? (housing.hotelNotice || housing.notice) : housing.notice;
   for (const [selector,key,value] of [['[data-date]','date',activeDate],['#statusFilters [data-status]','status',activeStatus],['[data-layer]','layer',activeLayer],['[data-type]','type',activeType]]) {
     document.querySelectorAll(selector).forEach(n => {
@@ -213,6 +225,7 @@ function saveFilters() {
   if (activeDate !== 'all') params.set('date',activeDate);
   if (activeStatus !== 'all') params.set('status',activeStatus);
   if (activeTerm !== 'all') params.set('term',activeTerm);
+  if (activePayment !== 'all') params.set('payment',activePayment);
   if (search) params.set('q',search);
   history.replaceState(null,'',location.pathname+location.search+(params.size?'#'+params.toString():''));
 }
@@ -226,6 +239,7 @@ $('layerFilters').onclick = e => {
   applyFilters();
 };
 $('housingFilters').onclick = e => { const n=e.target.closest('[data-type]'); if(n){activeType=n.dataset.type;if(!['all','apartment'].includes(activeType))activeTerm='all';applyFilters();} };
+$('paymentFilter').onchange = e => {activePayment=e.target.value;activeLayer='housing';applyFilters();};
 $('rentalTerm').onchange = e => {activeTerm=e.target.value;if(activeTerm!=='all'){activeType='apartment';activeLayer='housing';}applyFilters();};
 $('dateFilters').onclick = e => { const n=e.target.closest('[data-date]'); if(n){activeDate=n.dataset.date;applyFilters();} };
 $('statusFilters').onclick = e => { const n=e.target.closest('[data-status]'); if(n){activeStatus=n.dataset.status;applyFilters();} };
@@ -233,7 +247,7 @@ $('search').oninput = e => { search=e.target.value.trim().toLocaleLowerCase('ru'
 $('locationList').onclick = e => { const n=e.target.closest('[data-location-id]'); if(n)select(Number(n.dataset.locationId)); };
 $('fitButton').onclick = () => { closeDetails();fit(); };
 $('resetButton').onclick = () => {
-  activeLayer='all';activeType='all';activeDate='all';activeStatus='all';activeTerm='all';search='';$('search').value='';$('shootingControls').open=false;applyFilters();
+  activeLayer='all';activeType='all';activeDate='all';activeStatus='all';activeTerm='all';activePayment='all';search='';$('search').value='';$('shootingControls').open=false;applyFilters();
 };
 async function copy(text) {
   if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
@@ -260,6 +274,7 @@ const params = new URLSearchParams(location.hash.slice(1));
 if(['housing','shooting'].includes(params.get('layer')))activeLayer=params.get('layer');
 if(Object.hasOwn(kinds,params.get('type')))activeType=params.get('type');
 if(['monthly','daily'].includes(params.get('term'))){activeTerm=params.get('term');activeType='apartment';activeLayer='housing';}
+if(['invoice','card','unknown'].includes(params.get('payment')))activePayment=params.get('payment');
 if(byDate.has(params.get('date')))activeDate=params.get('date');
 if(Object.hasOwn(labels,params.get('status')))activeStatus=params.get('status');
 search=(params.get('q')||'').toLocaleLowerCase('ru');$('search').value=search;
