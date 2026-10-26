@@ -14,7 +14,7 @@ catch (error) {
   return;
 }
 let housing = {accommodations: []}, housingError = false;
-try { housing = await readJSON('accommodations.json'); }
+try { housing = await readJSON('accommodations.json?v=20261026-3'); }
 catch (error) { housingError = true; }
 const {shifts} = data;
 const shootings = data.locations;
@@ -68,9 +68,10 @@ function housingDetails(l) {
     <p class="budget-status budget-status--${esc(l.budgetStatus)}">${esc(l.budgetLabel)}</p>
     <p class="availability-note">${esc(l.availability)}</p>
     <dl class="housing-facts"><dt>Доплаты и залог</dt><dd>${esc(l.fees)}</dd>
-      <dt>Размещение</dt><dd>${esc(l.beds)}</dd>
+      <dt>Основной вариант — по одному</dt><dd>${esc(l.beds)}</dd>
+      <dt>Запасной вариант</dt><dd>${esc(l.fallbackNote)}</dd>
       <dt>Для экспедиции</dt><dd>${esc(l.note)}</dd></dl>
-    <p class="data-note">Каждому отдельная комната. Лимит: 1 200 ₽/сутки, или 37 200 ₽ за 31 ночь на человека. Полную стоимость с доплатами и число отдельных комнат нужно подтвердить.</p>
+    <p class="data-note">Приоритет — отдельная комната каждому. По 2–3 человека — запасной вариант после согласования. Лимит: 1 200 ₽/чел./сутки, или 37 200 ₽ за 31 ночь. Полную стоимость и спальные места нужно подтвердить.</p>
     <nav class="popup-actions">
       <a class="popup-action" href="${esc(l.source)}" target="_blank" rel="noopener">Сайт и условия ↗</a>
       <a class="popup-action popup-action--quiet" href="${esc(mapURL(l))}" target="_blank" rel="noopener">Яндекс Карты ↗</a>
@@ -89,7 +90,7 @@ function housingDetails(l) {
 function details(l) { return isHousing(l) ? housingDetails(l) : shootingDetails(l); }
 function telegram(l) {
   return isHousing(l)
-    ? ['РЕФЛЕКС · ЖИЛЬЁ · 24.11–25.12.2026',l.name,l.address,kinds[l.kind].singular,l.price,l.budgetLabel,'Каждому отдельная комната. Лимит: 37 200 ₽ на человека за 31 ночь.',l.fees,l.beds,l.note,l.availability,l.phone,l.source].filter(Boolean).join('\n')
+    ? ['РЕФЛЕКС · ЖИЛЬЁ · 24.11–25.12.2026',l.name,l.address,kinds[l.kind].singular,l.price,l.budgetLabel,'Приоритет — отдельная комната каждому. По 2–3 человека — запасной вариант после согласования. Лимит: 37 200 ₽ на человека за 31 ночь.',l.fees,l.beds,l.fallbackNote,l.note,l.availability,l.phone,l.source].filter(Boolean).join('\n')
     : shootingText(l);
 }
 function closeDetails() {
@@ -180,7 +181,7 @@ if (typeof L !== 'undefined') {
 } else $('map').innerHTML = '<div class="load-error"><strong>Подложка карты не загрузилась.</strong>Список объектов и карточки доступны. Проверьте подключение к интернету.</div>';
 $('dateFilters').innerHTML = '<button class="chip is-active" data-date="all">Все даты</button>'+shifts.map(s => `<button class="chip" data-date="${s.date}" title="${s.weekday} · Смена №${s.number}">${s.date}</button>`).join('');
 $('housingFilters').innerHTML = '<button class="chip" data-type="all">Все типы</button>'+Object.entries(kinds).map(([type,k]) => `<button class="chip" data-type="${type}" style="--housing-color:${k.color}">${k.label} <span class="chip-count">${accommodations.filter(l=>l.kind===type).length}</span></button>`).join('');
-$('housingNotice').textContent = housingError ? 'Жильё не загрузилось. Обновите страницу; съёмочные объекты доступны.' : '45 человек · каждому отдельная комната. 24.11–25.12 · 31 ночь · до 37 200 ₽/чел. Наличие и доплаты уточняются.';
+$('housingNotice').textContent = housingError ? 'Жильё не загрузилось. Обновите страницу; съёмочные объекты доступны.' : '45 человек · приоритет — по одному. По 2–3 — запасной вариант. 24.11–25.12 · 31 ночь · до 37 200 ₽/чел. Наличие и доплаты уточняются.';
 function syncButtons() {
   for (const [selector,key,value] of [['[data-date]','date',activeDate],['#statusFilters [data-status]','status',activeStatus],['[data-layer]','layer',activeLayer],['[data-type]','type',activeType]]) {
     document.querySelectorAll(selector).forEach(n => {
@@ -234,7 +235,7 @@ document.addEventListener('click',async e => {
     n.textContent='Скопировано';
   } catch(error) { n.textContent='Не удалось скопировать'; }
   setTimeout(()=>n.innerHTML=initial,1600);
-});
+},true);
 document.addEventListener('keydown',e => { if(e.key==='Escape')closeDetails(); });
 window.addEventListener('resize',() => {
   map?.invalidateSize();
